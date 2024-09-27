@@ -481,13 +481,10 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
         ),
-        Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            GenericProgressBar(
-              tag: NamedRoutes.routeLoginScreen,
-            ),
-          ],
+        Center(
+          child: GenericProgressBar(
+            tag: NamedRoutes.routeLoginScreen,
+          ),
         ),
       ],
     );

@@ -95,7 +95,7 @@ class _RecentDeliveryScreenState extends State<RecentDeliveryScreen> {
                 Expanded(
                   child: Obx(() {
                     return ordersModel.isEmpty
-                        ? Center(child: Text('No found recent deliveries'))
+                        ? Center(child: Text('No recent deliveries found'))
                         : MyCustomScrollBar(
                             child: Column(
                               children:
