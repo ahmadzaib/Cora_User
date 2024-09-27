@@ -1,0 +1,98 @@
+{
+  "project_info": {
+    "project_number": "553552936314",
+    "project_id": "cora-ca727",
+    "storage_bucket": "cora-ca727.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:553552936314:android:c6ad4eb1f33e1cc9242ac3",
+        "android_client_info": {
+          "package_name": "com.cora.rider"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "553552936314-p1ngjk8n2uff15g9j2i19lt4d5lv6gn8.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.cora.rider",
+            "certificate_hash": "a2af7311b09008fe3a7e6e9542c0b87580ff3af3"
+          }
+        },
+        {
+          "client_id": "553552936314-5gr4bm2961i0el1ti5vb3gc0dheokv66.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC7iG_ZECHsjznPsC6KAFE0nvXxNbj8ko4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "553552936314-5gr4bm2961i0el1ti5vb3gc0dheokv66.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "553552936314-eo7jonsa3rjtt15k9sa91jm9d7gk84dq.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.coraRideUser"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:553552936314:android:f874544bfc6fcaa1242ac3",
+        "android_client_info": {
+          "package_name": "com.cora.user"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "553552936314-mlilof7q0lklaq6282qhggfqrfvec88v.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.cora.user",
+            "certificate_hash": "a2af7311b09008fe3a7e6e9542c0b87580ff3af3"
+          }
+        },
+        {
+          "client_id": "553552936314-5gr4bm2961i0el1ti5vb3gc0dheokv66.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC7iG_ZECHsjznPsC6KAFE0nvXxNbj8ko4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "553552936314-5gr4bm2961i0el1ti5vb3gc0dheokv66.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "553552936314-eo7jonsa3rjtt15k9sa91jm9d7gk84dq.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.coraRideUser"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
