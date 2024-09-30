@@ -41,6 +41,7 @@ class _DeliveryDetailScreenState extends State<DeliveryDetailScreen> {
   var _pickupAddress = TextEditingController(),
       _dropOff = TextEditingController(),
       _deliverTo = TextEditingController(),
+      _delivery_off = TextEditingController(),
       _phNumber = TextEditingController(),
       _packageType = TextEditingController(),
       _senderName = TextEditingController(),
@@ -73,7 +74,7 @@ class _DeliveryDetailScreenState extends State<DeliveryDetailScreen> {
   @override
   void initState() {
     super.initState();
-
+    _getCurrentLocation();
     apiController =
         Get.put(APIController(), tag: NamedRoutes.routeDelievryDetailScreen);
     mainScreenController = Get.find<MainScreenController>();
@@ -108,7 +109,27 @@ class _DeliveryDetailScreenState extends State<DeliveryDetailScreen> {
     });
   }
 
-  final DropdownController dropdownController = DropdownController();
+  String currentLocationAddress = ''; // Current location address
+  Future<void> _getCurrentLocation() async {
+    Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high);
+    List<Placemark> placemarks =
+        await placemarkFromCoordinates(position.latitude, position.longitude);
+    setState(() {});
+    if (placemarks.isNotEmpty) {
+      currentLocationAddress =
+          '${placemarks.first.name}, ${placemarks.first.locality}, ${placemarks.first.country}';
+      _pickupAddress.text =
+          currentLocationAddress; // Text field mein address set karein
+      pickupMap = {
+        'pickup_latitude': position.latitude,
+        'pickup_longitude': position.longitude,
+      };
+    }
+  }
+
+  final DropdownController selectedTypeController = DropdownController();
+  final DropdownController deliveryTypeController = DropdownController();
   @override
   Widget build(BuildContext context) {
     Size size = MediaQuery.of(context).size;
@@ -154,7 +175,7 @@ class _DeliveryDetailScreenState extends State<DeliveryDetailScreen> {
       children: [
         SingleChildScrollView(
           child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Column(
               mainAxisSize: MainAxisSize.max,
               crossAxisAlignment: CrossAxisAlignment.center,
@@ -203,29 +224,44 @@ class _DeliveryDetailScreenState extends State<DeliveryDetailScreen> {
                                   Expanded(
                                     child: TypeAheadField<String>(
                                       suggestionsCallback: (pattern) async {
-                                        if (isNotEmpty(pattern)) {
-                                          var basemodel = (await apiController
+                                        if (pattern.isNotEmpty) {
+                                          var basemodel = await apiController
                                               .mapService
                                               .apiCallPlaceSuggestions({
                                             'input': pattern,
                                             'key': AppSecureInformation
-                                                .MAPS_API_KEY
-                                          }, apiController.isLoading));
+                                                .MAPS_API_KEY,
+                                          }, apiController.isLoading);
+
                                           logMessage(basemodel);
-                                          return (basemodel.data
-                                              as List<String>);
+
+                                          if (basemodel.data is List<String>) {
+                                            List<String> suggestions =
+                                                List.from(basemodel.data);
+                                            Set<String> suggestionsSet =
+                                                Set.from(suggestions);
+                                            suggestionsSet.add(
+                                                currentLocationAddress); // Add the current location
+                                            return suggestionsSet
+                                                .toList(); // Return unique suggestions
+                                          }
                                         }
-                                        return Future.value(['']);
+                                        return []; // Return empty list if no suggestions
                                       },
+                                      // This part handles the rendering of the input field
                                       builder:
                                           (context, controller, focusNode) {
                                         return TextField(
-                                          controller: controller,
+                                          controller: _pickupAddress,
                                           focusNode: focusNode,
-                                          autofocus: true,
                                           decoration: InputDecoration(
                                             border: OutlineInputBorder(),
-                                            labelText: 'City',
+                                            labelText: 'Address',
+                                            hintText: 'Input Address',
+                                            contentPadding:
+                                                EdgeInsets.symmetric(
+                                                    horizontal: 8.0,
+                                                    vertical: 12.0),
                                           ),
                                         );
                                       },
@@ -242,26 +278,31 @@ class _DeliveryDetailScreenState extends State<DeliveryDetailScreen> {
                                         );
                                       },
                                       onSelected: (String suggestion) async {
-                                        _dropOff.text = suggestion;
+                                        setState(() {
+                                          _pickupAddress.text =
+                                              suggestion; // Update the selected suggestion in the text field
+                                        });
+
                                         List<Location> locations =
                                             await locationFromAddress(
                                                 suggestion);
-                                        if (isNotEmpty(locations) &&
-                                            locations.isNotEmpty) {
-                                          dropOffMap = {
-                                            'drop_latitude':
+                                        if (locations.isNotEmpty) {
+                                          pickupMap = {
+                                            'pickup_latitude':
                                                 locations[0].latitude,
-                                            'drop_longitude':
+                                            'pickup_longitude':
                                                 locations[0].longitude,
                                           };
-                                          book.value = 'Calculate Fare';
+                                          book.value =
+                                              'Calculate Fare'; // Update the fare calculation prompt
                                         }
                                       },
+                                      // Validation can be handled outside the TypeAheadField since it's no longer a form field
                                     ),
                                   ),
                                   GestureDetector(
                                     onTap: () async {
-                                      await pickCurrentLocation();
+                                      _getCurrentLocation();
                                     },
                                     child: Padding(
                                       padding: const EdgeInsets.only(right: 24),
@@ -290,7 +331,7 @@ class _DeliveryDetailScreenState extends State<DeliveryDetailScreen> {
                               keyboard: TextInputType.text,
                               passwordVisible: false,
                               saveData: ((data) {}),
-                              hintStyle: TextStyle(
+                              hintStyle: const TextStyle(
                                   color: darkGreyColorTextField,
                                   fontSize: 12,
                                   decorationThickness: 0,
@@ -299,11 +340,11 @@ class _DeliveryDetailScreenState extends State<DeliveryDetailScreen> {
                               prefixImage: ic_profileIcon,
                               suffixImage: GestureDetector(
                                 onTap: () {},
-                                child: Text(
+                                child: const Text(
                                   "",
                                 ),
                               ),
-                              padding: EdgeInsets.only(
+                              padding: const EdgeInsets.only(
                                   left: 10, top: 8, bottom: 8, right: 6),
                             ),
                           ),
@@ -365,31 +406,22 @@ class _DeliveryDetailScreenState extends State<DeliveryDetailScreen> {
                                   Expanded(
                                     child: TypeAheadField<String>(
                                       suggestionsCallback: (pattern) async {
-                                        if (isNotEmpty(pattern)) {
-                                          var basemodel = (await apiController
+                                        if (pattern.isNotEmpty) {
+                                          var basemodel = await apiController
                                               .mapService
                                               .apiCallPlaceSuggestions({
                                             'input': pattern,
                                             'key': AppSecureInformation
                                                 .MAPS_API_KEY
-                                          }, apiController.isLoading));
+                                          }, apiController.isLoading);
+
+                                          // Log the suggestions for debugging
                                           logMessage(basemodel);
+
                                           return (basemodel.data
                                               as List<String>);
                                         }
-                                        return Future.value(['']);
-                                      },
-                                      builder:
-                                          (context, controller, focusNode) {
-                                        return TextField(
-                                          controller: controller,
-                                          focusNode: focusNode,
-                                          autofocus: true,
-                                          decoration: InputDecoration(
-                                            border: OutlineInputBorder(),
-                                            labelText: 'City',
-                                          ),
-                                        );
+                                        return Future.value([]);
                                       },
                                       itemBuilder:
                                           (context, String suggestion) {
@@ -404,12 +436,16 @@ class _DeliveryDetailScreenState extends State<DeliveryDetailScreen> {
                                         );
                                       },
                                       onSelected: (String suggestion) async {
+                                        // Update _dropOff with the selected suggestion
                                         _dropOff.text = suggestion;
+
+                                        // Fetch the location details
                                         List<Location> locations =
                                             await locationFromAddress(
                                                 suggestion);
-                                        if (isNotEmpty(locations) &&
-                                            locations.isNotEmpty) {
+
+                                        // Update the dropOffMap if locations are found
+                                        if (locations.isNotEmpty) {
                                           dropOffMap = {
                                             'drop_latitude':
                                                 locations[0].latitude,
@@ -418,6 +454,26 @@ class _DeliveryDetailScreenState extends State<DeliveryDetailScreen> {
                                           };
                                           book.value = 'Calculate Fare';
                                         }
+                                      },
+                                      // Use builder to configure the text field
+                                      builder:
+                                          (context, controller, focusNode) {
+                                        return TextField(
+                                          controller:
+                                              controller, // Pass the controller here
+                                          focusNode: focusNode,
+                                          decoration:
+                                              densedFieldDecorationWithoutPadding(
+                                            style: const TextStyle(
+                                                fontSize: 12,
+                                                color: darkGreyColorTextField),
+                                            hint: "Input Address",
+                                            horizontalPad: 2.0,
+                                            verticalPad: 12.0,
+                                          ),
+                                          maxLines: 1,
+                                          minLines: 1,
+                                        );
                                       },
                                     ),
                                   ),
@@ -443,7 +499,7 @@ class _DeliveryDetailScreenState extends State<DeliveryDetailScreen> {
                               keyboard: TextInputType.text,
                               passwordVisible: false,
                               saveData: ((data) {}),
-                              hintStyle: TextStyle(
+                              hintStyle: const TextStyle(
                                   color: darkGreyColorTextField,
                                   fontSize: 12,
                                   decorationThickness: 0,
@@ -452,11 +508,11 @@ class _DeliveryDetailScreenState extends State<DeliveryDetailScreen> {
                               prefixImage: ic_profileIcon,
                               suffixImage: GestureDetector(
                                 onTap: () {},
-                                child: Text(
+                                child: const Text(
                                   "",
                                 ),
                               ),
-                              padding: EdgeInsets.only(
+                              padding: const EdgeInsets.only(
                                   left: 10, top: 8, bottom: 8, right: 6),
                             ),
                           ),
@@ -496,52 +552,81 @@ class _DeliveryDetailScreenState extends State<DeliveryDetailScreen> {
                       verticalSpace(height: 6),
                       Stack(
                         children: [
-                          Container(
-                            child: CoolDropdown(
-                              controller:
-                                  dropdownController, // Required controller
-                              dropdownList: packageTypes.map((package) {
-                                return CoolDropdownItem(
-                                  label: package[
-                                      'label'], // Adjust based on your data structure
-                                  value: package['value'],
-                                );
-                              }).toList(),
-                              onChange: (item) {
-                                selectedPackageType =
-                                    (item as CoolDropdownItem).label;
-                                book.value = 'Calculate Fare';
-                              },
-                              resultOptions: ResultOptions(
-                                width: size.width - 68,
-                                height: 50,
-                                padding: EdgeInsets.only(
-                                    left: 46, top: 10, bottom: 10, right: 14),
-                                textStyle: regularWhiteText13(Colors.black,
-                                    fontWeight: FontWeight.w500),
-                                placeholder: 'Choose',
-                                // placeholder: regularWhiteText13(darkGreyColorTextField),
-                                icon: Image.asset(
-                                  ic_arrowDownIcon,
-                                  scale: 4,
+                          WillPopScope(
+                            onWillPop: () async {
+                              if (selectedTypeController.isOpen) {
+                                selectedTypeController.close();
+                                return Future.value(false);
+                              } else {
+                                return Future.value(true);
+                              }
+                            },
+                            child: Container(
+                              child: CoolDropdown(
+                                controller:
+                                    selectedTypeController, // Required controller
+                                dropdownList: packageTypes.map((package) {
+                                  return CoolDropdownItem(
+                                    label: package[
+                                        'label'], // Adjust based on your data structure
+                                    value: package['value'],
+                                  );
+                                }).toList(),
+                                onChange: (item) async {
+                                  setState(() {});
+                                  selectedPackageType =
+                                      (item as CoolDropdownItem).label;
+                                  book.value = 'Calculate Fare';
+
+                                  // Reset error state if there is any
+                                  if (selectedTypeController.isError) {
+                                    await selectedTypeController.resetError();
+                                  }
+
+                                  // Optionally close the dropdown after selection
+                                  selectedTypeController.close();
+                                },
+                                resultOptions: ResultOptions(
+                                  width: size.width - 68,
+                                  height: 50,
+                                  padding: const EdgeInsets.only(
+                                    left: 46,
+                                    top: 10,
+                                    bottom: 10,
+                                    right: 14,
+                                  ),
+                                  textStyle: regularWhiteText13(Colors.black,
+                                      fontWeight: FontWeight.w500),
+                                  placeholder: 'Choose',
+                                  icon: Image.asset(
+                                    ic_arrowDownIcon,
+                                    scale: 4,
+                                  ),
                                 ),
-                                // iconRotation: false,
-                              ),
-                              dropdownOptions: DropdownOptions(
-                                width: 200,
-                                height: 190,
-                              ),
-                              dropdownItemOptions: DropdownItemOptions(
-                                height: 30,
-                                alignment: Alignment.center,
-                                selectedTextStyle: regularWhiteText15(
-                                    Colors.black,
-                                    fontWeight: FontWeight.w500),
-                                selectedBoxDecoration: const BoxDecoration(
-                                  color: blueAppColor,
+                                dropdownOptions: const DropdownOptions(
+                                  width: 200,
+                                  height: 190,
+                                ),
+                                dropdownItemOptions: DropdownItemOptions(
+                                  height: 30,
+                                  alignment: Alignment
+                                      .center, // Center-align dropdown items
+                                  isMarquee: true, // Enable marquee for items
+                                  mainAxisAlignment: MainAxisAlignment.start,
+                                  render: DropdownItemRender.all,
+                                  textStyle: TextStyle(fontSize: 13),
+                                  selectedTextStyle: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                  selectedBoxDecoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(12),
+                                    color:
+                                        blueAppColor, // Background color for selected item
+                                  ),
                                 ),
                               ),
-                              isMarquee: false,
                             ),
                           ),
                           Positioned(
@@ -574,53 +659,103 @@ class _DeliveryDetailScreenState extends State<DeliveryDetailScreen> {
                       verticalSpace(height: 6),
                       Stack(
                         children: [
-                          Container(
+                          WillPopScope(
+                            onWillPop: () async {
+                              if (deliveryTypeController.isOpen) {
+                                deliveryTypeController.close();
+                                return Future.value(false);
+                              } else {
+                                return Future.value(true);
+                              }
+                            },
                             child: CoolDropdown(
                               controller:
-                                  dropdownController, // Required controller
-                              dropdownList: packageTypes.map((package) {
-                                return CoolDropdownItem(
-                                  label: package[
-                                      'label'], // Adjust based on your data structure
-                                  value: package['value'],
-                                );
-                              }).toList(),
-                              onChange: (item) {
-                                selectedPackageType =
-                                    (item as CoolDropdownItem).label;
-                                book.value = 'Calculate Fare';
+                                  deliveryTypeController, // Use the retained controller
+                              isMarquee: false, // Disable marquee effect
+                              dropdownList: List.generate(
+                                items.length,
+                                (index) {
+                                  return CoolDropdownItem(
+                                    label: items[
+                                        index], // Assuming each item is a string
+                                    value: items[index],
+                                  );
+                                },
+                              ).toList(),
+
+                              onChange: (item) async {
+                                setState(() {});
+                                deliveryType = (item as CoolDropdownItem).label;
+                                book.value =
+                                    'Calculate Fare'; // Update book value
+
+                                // Logic for handling specific dropdown selection
+                                if (item.value == packageTypes[1]['value']) {
+                                  deliveryType = 'same'; // Set to 'same'
+                                } else {
+                                  deliveryType = 'other'; // Set to 'other'
+                                }
+
+                                // Reset error state if there is any
+                                if (deliveryTypeController.isError) {
+                                  await deliveryTypeController.resetError();
+                                }
+
+                                // Optionally close the dropdown after selection
+                                deliveryTypeController.close();
                               },
                               resultOptions: ResultOptions(
                                 width: size.width - 68,
                                 height: 50,
-                                padding: EdgeInsets.only(
+                                padding: const EdgeInsets.only(
                                     left: 46, top: 10, bottom: 10, right: 14),
-                                // textStyle: regularWhiteText13(Colors.black,
-                                //     fontWeight: FontWeight.w500),
-
-                                // placeholder:
-                                //     regularWhiteText13(darkGreyColorTextField),
+                                textStyle: regularWhiteText13(Colors.black,
+                                    fontWeight: FontWeight.w500),
+                                placeholder: 'Delivery Type',
                                 icon: Image.asset(
                                   ic_arrowDownIcon,
                                   scale: 4,
                                 ),
-                                // iconRotation: false,
                               ),
-                              dropdownOptions: DropdownOptions(
+
+                              dropdownOptions: const DropdownOptions(
                                 width: 200,
                                 height: 190,
+                                gap: DropdownGap.all(5),
+                                borderSide:
+                                    BorderSide(width: 1, color: Colors.black),
+                                padding: EdgeInsets.symmetric(horizontal: 10),
+                                align: DropdownAlign.left,
+                                animationType: DropdownAnimationType.size,
                               ),
+
+                              dropdownTriangleOptions:
+                                  const DropdownTriangleOptions(
+                                width: 20,
+                                height: 30,
+                                align: DropdownTriangleAlign.left,
+                                borderRadius: 3,
+                                left: 20,
+                              ),
+
                               dropdownItemOptions: DropdownItemOptions(
                                 height: 30,
-                                alignment: Alignment.center,
-                                // selectedTextStyle: regularWhiteText15(
-                                //     Colors.black,
-                                //     fontWeight: FontWeight.w500),
-                                selectedBoxDecoration: const BoxDecoration(
-                                  color: blueAppColor,
+                                alignment: Alignment
+                                    .center, // Center-align dropdown items
+                                isMarquee: true, // Enable marquee for items
+                                mainAxisAlignment: MainAxisAlignment.start,
+                                render: DropdownItemRender.all,
+                                textStyle: TextStyle(fontSize: 13),
+                                selectedTextStyle: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white),
+                                selectedBoxDecoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(12),
+                                  color:
+                                      blueAppColor, // Background color for selected item
                                 ),
                               ),
-                              isMarquee: false,
                             ),
                           ),
                           Positioned(
@@ -672,7 +807,7 @@ class _DeliveryDetailScreenState extends State<DeliveryDetailScreen> {
                                   keyboard: TextInputType.text,
                                   passwordVisible: false,
                                   saveData: ((data) {}),
-                                  hintStyle: TextStyle(
+                                  hintStyle: const TextStyle(
                                       color: darkGreyColorTextField,
                                       fontSize: 12,
                                       decorationThickness: 0,
@@ -684,7 +819,7 @@ class _DeliveryDetailScreenState extends State<DeliveryDetailScreen> {
                                       onTapApplyCoupon();
                                     },
                                     child: Container(
-                                      margin: EdgeInsets.symmetric(
+                                      margin: const EdgeInsets.symmetric(
                                           vertical: 6, horizontal: 6),
                                       width: 70,
                                       decoration: BoxDecoration(
@@ -699,7 +834,7 @@ class _DeliveryDetailScreenState extends State<DeliveryDetailScreen> {
                                                       FontWeight.w600))),
                                     ),
                                   ),
-                                  padding: EdgeInsets.only(
+                                  padding: const EdgeInsets.only(
                                       left: 10, top: 8, bottom: 8, right: 6),
                                 ),
                               ),
@@ -747,7 +882,7 @@ class _DeliveryDetailScreenState extends State<DeliveryDetailScreen> {
                         Column(
                           children: List.generate(paymentList.length, (index) {
                             return Container(
-                              margin: EdgeInsets.only(bottom: 16),
+                              margin: const EdgeInsets.only(bottom: 16),
                               child: Row(
                                 children: [
                                   Container(
@@ -759,7 +894,7 @@ class _DeliveryDetailScreenState extends State<DeliveryDetailScreen> {
                                             8, 8,
                                             color: whiteContainerColor,
                                             shadowColor: Colors.black12),
-                                    padding: EdgeInsets.symmetric(
+                                    padding: const EdgeInsets.symmetric(
                                         horizontal: 10, vertical: 11),
                                     child: Image.asset(
                                       paymentList[index]['image'],
@@ -791,7 +926,7 @@ class _DeliveryDetailScreenState extends State<DeliveryDetailScreen> {
                                               : whiteContainerColor,
                                           borderRadius:
                                               BorderRadius.circular(8)),
-                                      padding: EdgeInsets.symmetric(
+                                      padding: const EdgeInsets.symmetric(
                                           horizontal: 5, vertical: 5),
                                       child: Icon(
                                         Icons.check_outlined,
@@ -850,8 +985,8 @@ class _DeliveryDetailScreenState extends State<DeliveryDetailScreen> {
                         decoration: BoxDecoration(
                             color: darkBlackColor,
                             borderRadius: BorderRadius.circular(12)),
-                        padding:
-                            EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 10),
                         child: Image.asset(
                           ic_crossIcon,
                         ),
@@ -947,11 +1082,11 @@ class _DeliveryDetailScreenState extends State<DeliveryDetailScreen> {
       showSnackBar('Please choose your pickup address', context);
     } else if (dropOffMap.isEmpty) {
       showSnackBar('Please choose your drop off address', context);
-    } else if (isEmpty(_deliverTo.text)) {
+    } else if (isEmpty(deliveryTypeController)) {
       showSnackBar('Please fill recipient name', context);
     } else if (isEmpty(_phNumber.text)) {
       showSnackBar('Please fill phone number', context);
-    } else if (isEmpty(selectedPackageType)) {
+    } else if (isEmpty(selectedTypeController)) {
       showSnackBar('Please provide your package information', context);
     } else {
       return true;

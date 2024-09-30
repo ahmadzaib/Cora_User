@@ -38,8 +38,8 @@ class APIEndpoints {
 }
 
 class AppSecureInformation {
-  static String MAPS_API_KEY = 'AIzaSyAd8Huk4y_-3pj5ZqIrb8lhkwA_ZP9nX1M';
-  // static String MAPS_API_KEY = 'AIzaSyBRUT4-rZGSLYckECWh9t-uG-5MsdvcMfI';
+  // static String MAPS_API_KEY = 'AIzaSyAd8Huk4y_-3pj5ZqIrb8lhkwA_ZP9nX1M';
+  static String MAPS_API_KEY = 'AIzaSyCa-bvn_Yn-y9qBLglmPPSQ4HJRecxgd8k';
 
   AppSecureInformation._();
 }
