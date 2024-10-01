@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:developer';
 import 'dart:io';
-
+import 'package:country_code_picker/country_code_picker.dart';
 import 'package:coraapp/helper/Auth/auth_helper.dart';
 import 'package:coraapp/models/Auth/login_model.dart';
 import 'package:coraapp/utils/constants.dart';
@@ -93,6 +93,41 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     return false;
+  }
+
+  String? selectedCode = "+234"; // Default code
+
+  void _openCountryPicker() async {
+    final countryCode = await showDialog<String>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Select Country Code'),
+          content: Container(
+            width: double.maxFinite,
+            child: CountryCodePicker(
+              onChanged: (countryCode) {
+                Navigator.of(context).pop(countryCode.dialCode);
+              },
+              initialSelection: 'NG', // Initial country (Nigeria)
+              showCountryOnly: false,
+              showOnlyCountryWhenClosed: false,
+              favorite: [
+                '+234',
+                '+1',
+                '+44'
+              ], // Add your favorite country codes
+            ),
+          ),
+        );
+      },
+    );
+
+    if (countryCode != null) {
+      setState(() {
+        selectedCode = countryCode; // Update the selected code
+      });
+    }
   }
 
   @override
@@ -220,10 +255,15 @@ class _LoginScreenState extends State<LoginScreen> {
                               color: lightGreyColor.withOpacity(.8),
                             ),
                             horizontalSpace(width: 6),
-                            Text(
-                              "+234",
-                              style: regularWhiteText14(darkBlackColor,
-                                  fontWeight: FontWeight.w600),
+                            InkWell(
+                              onTap: () {
+                                _openCountryPicker();
+                              },
+                              child: Text(
+                                selectedCode.toString(),
+                                style: regularWhiteText14(darkBlackColor,
+                                    fontWeight: FontWeight.w600),
+                              ),
                             ),
                             horizontalSpace(width: 8),
                             Expanded(
@@ -360,7 +400,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       GestureDetector(
                         onTap: () async {
                           loginApi({
-                            "phone": '+234${_phoneController.text}',
+                            "phone": '$selectedCode${_phoneController.text}',
                             "password": _passwordController.text,
                             "user_type": 'user',
                             "device_token":
@@ -410,69 +450,69 @@ class _LoginScreenState extends State<LoginScreen> {
                                 fontWeight: FontWeight.w500),
                           )),
                       verticalSpace(height: 32),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: InkWell(
-                              onTap: () async {
-                                if (Platform.isAndroid) {
-                                  _loginWithGoogle();
-                                } else {
-                                  _loginWithApple();
-                                }
-                              },
-                              child: Container(
-                                decoration: BoxDecoration(
-                                    color: whiteContainerColor,
-                                    borderRadius: BorderRadius.circular(16),
-                                    boxShadow: [
-                                      BoxShadow(
-                                          offset: Offset(0, 8),
-                                          blurRadius: 8,
-                                          color:
-                                              Colors.black12.withOpacity(.07))
-                                    ]),
-                                child: CustomizedButton(
-                                  buttonHeight: 48,
-                                  imgb: (Platform.isIOS)
-                                      ? ic_apple
-                                      : ic_googleIcon,
-                                  buttonWidth: Get.width,
-                                  text: (Platform.isIOS) ? 'Apple' : 'Google',
-                                  textStyle: regularWhiteText16(Colors.black,
-                                      fontWeight: FontWeight.w500),
-                                ),
-                              ),
-                            ),
-                          ),
-                          horizontalSpace(),
-                          Expanded(
-                            child: (Platform.isAndroid)
-                                ? Container(
-                                    decoration: BoxDecoration(
-                                        color: whiteContainerColor,
-                                        borderRadius: BorderRadius.circular(16),
-                                        boxShadow: [
-                                          BoxShadow(
-                                              offset: Offset(0, 8),
-                                              blurRadius: 8,
-                                              color: Colors.black12
-                                                  .withOpacity(.07))
-                                        ]),
-                                    child: CustomizedButton(
-                                      buttonHeight: 48,
-                                      imgb: ic_facebookIcon,
-                                      buttonWidth: Get.width,
-                                      text: 'Facebook',
-                                      textStyle: regularWhiteText16(
-                                          Colors.black,
-                                          fontWeight: FontWeight.w500),
-                                    ),
-                                  )
-                                : SizedBox(),
-                          ),
-                        ],
-                      ),
+                      // Row(
+                      //   children: [
+                      //     Expanded(
+                      //       child: InkWell(
+                      //         onTap: () async {
+                      //           if (Platform.isAndroid) {
+                      //             _loginWithGoogle();
+                      //           } else {
+                      //             _loginWithApple();
+                      //           }
+                      //         },
+                      //         child: Container(
+                      //           decoration: BoxDecoration(
+                      //               color: whiteContainerColor,
+                      //               borderRadius: BorderRadius.circular(16),
+                      //               boxShadow: [
+                      //                 BoxShadow(
+                      //                     offset: Offset(0, 8),
+                      //                     blurRadius: 8,
+                      //                     color:
+                      //                         Colors.black12.withOpacity(.07))
+                      //               ]),
+                      //           child: CustomizedButton(
+                      //             buttonHeight: 48,
+                      //             imgb: (Platform.isIOS)
+                      //                 ? ic_apple
+                      //                 : ic_googleIcon,
+                      //             buttonWidth: Get.width,
+                      //             text: (Platform.isIOS) ? 'Apple' : 'Google',
+                      //             textStyle: regularWhiteText16(Colors.black,
+                      //                 fontWeight: FontWeight.w500),
+                      //           ),
+                      //         ),
+                      //       ),
+                      //     ),
+                      //     horizontalSpace(),
+                      //     // Expanded(
+                      //     //   child: (Platform.isAndroid)
+                      //     //       ? Container(
+                      //     //           decoration: BoxDecoration(
+                      //     //               color: whiteContainerColor,
+                      //     //               borderRadius: BorderRadius.circular(16),
+                      //     //               boxShadow: [
+                      //     //                 BoxShadow(
+                      //     //                     offset: Offset(0, 8),
+                      //     //                     blurRadius: 8,
+                      //     //                     color: Colors.black12
+                      //     //                         .withOpacity(.07))
+                      //     //               ]),
+                      //     //           child: CustomizedButton(
+                      //     //             buttonHeight: 48,
+                      //     //             imgb: ic_facebookIcon,
+                      //     //             buttonWidth: Get.width,
+                      //     //             text: 'Facebook',
+                      //     //             textStyle: regularWhiteText16(
+                      //     //                 Colors.black,
+                      //     //                 fontWeight: FontWeight.w500),
+                      //     //           ),
+                      //     //         )
+                      //     //       : SizedBox(),
+                      //     // ),
+                      //   ],
+                      // ),
                     ],
                   ),
                 ),

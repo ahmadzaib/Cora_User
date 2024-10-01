@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:cool_dropdown/cool_dropdown.dart';
 import 'package:cool_dropdown/models/cool_dropdown_item.dart';
@@ -12,6 +13,10 @@ import 'package:flutter_typeahead/flutter_typeahead.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:get/get.dart';
+import 'package:http/http.dart' as http;
+
+import 'package:get/get_connect/http/src/utils/utils.dart';
+import '../controllers/GoogleMapController/googlwmapcontroller.dart';
 import '../service_locator.dart';
 import '../utils/colors.dart';
 import '../utils/decorations.dart';
@@ -52,29 +57,37 @@ class _DeliveryDetailScreenState extends State<DeliveryDetailScreen> {
   late APIController apiController;
 
   Map<String, double> pickupMap = {};
-  Map<String, double> dropOffMap = {};
+  Map<String, double> dropOffMap = {
+    'drop_latitude': 0.0343,
+    'drop_longitude': 0.342424
+  };
   Map<String, double> placemarks = {};
 
   var book = 'Calculate Fare'.obs;
-
   var totalAmount = '0'.obs;
-
   var couponController = TextEditingController();
-
   int discountAmount = 0;
-
   List<Map> packageTypes = [];
-
   String selectedPackageType = '';
-
   var deliveryType = 'same';
-
   var paymentMethod = 'wallet';
+  final FocusNode _focusNode = FocusNode();
+  @override
+  void dispose() {
+    // TODO: implement dispose
+    _dropOff.dispose();
+    _controller.dispose();
+    _focusNode.dispose();
+    fromaddresscontroller.dispose();
+    _fromfocusNode.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
     super.initState();
     _getCurrentLocation();
+    _dropOff = TextEditingController();
     apiController =
         Get.put(APIController(), tag: NamedRoutes.routeDelievryDetailScreen);
     mainScreenController = Get.find<MainScreenController>();
@@ -107,24 +120,123 @@ class _DeliveryDetailScreenState extends State<DeliveryDetailScreen> {
         }
       }
     });
+
+    _getCurrentLocation(); // Get the current location when the app starts
+    _controller.addListener(() {
+      if (_focusNode.hasFocus) {
+        if (_controller.text.isNotEmpty) {
+          _placesController.getSuggestions(_controller.text);
+          _isSuggestionVisible = true; // Show suggestions
+        } else {
+          _isSuggestionVisible = false; // Hide suggestions if no text
+        }
+      } else {
+        _isSuggestionVisible = false; // Hide suggestions when not focused
+      }
+      setState(() {}); // Refresh the UI
+    });
+    // Add focus listener to handle focus changes
+    _focusNode.addListener(() {
+      if (!_focusNode.hasFocus) {
+        _isSuggestionVisible = false; // Hide suggestions when focus is lost
+        setState(() {}); // Refresh the UI
+      }
+    });
+    // Listen for changes in focus
+    _fromfocusNode.addListener(() {
+      setState(() {
+        // Show suggestions when focused, hide when not focused
+        _fromisSuggestionVisible = _fromfocusNode.hasFocus;
+      });
+    });
+
+    fromaddresscontroller.addListener(() {
+      // Trigger suggestions only when focused
+      if (_fromfocusNode.hasFocus) {
+        if (fromaddresscontroller.text.isNotEmpty) {
+          controllers.getSuggestions(fromaddresscontroller.text);
+        } else {
+          controllers.placeList.clear(); // Clear suggestions if input is empty
+        }
+      }
+    });
   }
 
-  String currentLocationAddress = ''; // Current location address
+  final TextEditingController _controller = TextEditingController();
+  final PlacesController _placesController = Get.put(PlacesController());
+  final controllers = Get.put(mapcontroller());
+
+  bool _isSuggestionVisible = false; // Track visibility of suggestions
+  String _currentAddress = '';
+
   Future<void> _getCurrentLocation() async {
+    bool serviceEnabled;
+    LocationPermission permission;
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      // Location services are not enabled, handle it accordingly
+      return Future.error('Location services are disabled.');
+    }
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        // Handle the case when permission is denied
+        return Future.error('Location permissions are denied.');
+      }
+    }
+    if (permission == LocationPermission.deniedForever) {
+      return Future.error(
+          'Location permissions are permanently denied, we cannot request permissions.');
+    }
     Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high);
-    List<Placemark> placemarks =
-        await placemarkFromCoordinates(position.latitude, position.longitude);
-    setState(() {});
-    if (placemarks.isNotEmpty) {
-      currentLocationAddress =
-          '${placemarks.first.name}, ${placemarks.first.locality}, ${placemarks.first.country}';
-      _pickupAddress.text =
-          currentLocationAddress; // Text field mein address set karein
-      pickupMap = {
-        'pickup_latitude': position.latitude,
-        'pickup_longitude': position.longitude,
-      };
+    String address = await _placesController.getAddressFromCoordinates(
+        position.latitude, position.longitude);
+    pickupMap = {
+      'pickup_latitude': position.latitude,
+      'pickup_longitude': position.longitude,
+    };
+
+    setState(() {
+      _currentAddress = address; // Store the current address
+      _controller.text = _currentAddress!; // Display it in the TextField
+    });
+  }
+
+  final TextEditingController fromaddresscontroller = TextEditingController();
+
+  final FocusNode _fromfocusNode = FocusNode();
+  bool _fromisSuggestionVisible = false;
+  String fromLocationAddress = 'dsfsdfsdf'; // To store selected address
+  double fromLocationLatitude = 0.023412; // To store selected latitude
+  double fromLocationLongitude = 0.123123; // To store selected longitude
+  // Function to get details from place ID
+  Future<void> getPlaceDetails(String placeId) async {
+    const String PLACES_API_KEY = "AIzaSyCa-bvn_Yn-y9qBLglmPPSQ4HJRecxgd8k";
+    String baseURL = 'https://maps.googleapis.com/maps/api/place/details/json';
+    String request = '$baseURL?place_id=$placeId&key=$PLACES_API_KEY';
+
+    try {
+      var response = await http.get(Uri.parse(request));
+
+      if (response.statusCode == 200) {
+        var data = json.decode(response.body);
+        print('Response Data: $data'); // Log the entire response data
+
+        if (data['result'] != null) {
+          // Set selected address and its coordinates
+          fromLocationAddress = data['result']['formatted_address'];
+          fromLocationLatitude = data['result']['geometry']['location']['lat'];
+          fromLocationLongitude = data['result']['geometry']['location']['lng'];
+        } else {
+          print('No result found for placeId: $placeId');
+        }
+      } else {
+        print('Error: ${response.statusCode} - ${response.reasonPhrase}');
+      }
+    } catch (e) {
+      print('Failed to load place details: $e');
     }
   }
 
@@ -222,82 +334,53 @@ class _DeliveryDetailScreenState extends State<DeliveryDetailScreen> {
                                   ),
                                   horizontalSpace(width: 6),
                                   Expanded(
-                                    child: TypeAheadField<String>(
-                                      suggestionsCallback: (pattern) async {
-                                        if (pattern.isNotEmpty) {
-                                          var basemodel = await apiController
-                                              .mapService
-                                              .apiCallPlaceSuggestions({
-                                            'input': pattern,
-                                            'key': AppSecureInformation
-                                                .MAPS_API_KEY,
-                                          }, apiController.isLoading);
-
-                                          logMessage(basemodel);
-
-                                          if (basemodel.data is List<String>) {
-                                            List<String> suggestions =
-                                                List.from(basemodel.data);
-                                            Set<String> suggestionsSet =
-                                                Set.from(suggestions);
-                                            suggestionsSet.add(
-                                                currentLocationAddress); // Add the current location
-                                            return suggestionsSet
-                                                .toList(); // Return unique suggestions
-                                          }
-                                        }
-                                        return []; // Return empty list if no suggestions
-                                      },
-                                      // This part handles the rendering of the input field
+                                    child: TypeAheadField(
                                       builder:
                                           (context, controller, focusNode) {
                                         return TextField(
-                                          controller: _pickupAddress,
-                                          focusNode: focusNode,
+                                          focusNode: _focusNode,
+                                          controller: _controller,
+                                          style: TextStyle(
+                                              color: Colors.black,
+                                              fontSize: 14,
+                                              decorationThickness: 0,
+                                              fontWeight: FontWeight.w400),
                                           decoration: InputDecoration(
-                                            border: OutlineInputBorder(),
-                                            labelText: 'Address',
-                                            hintText: 'Input Address',
-                                            contentPadding:
-                                                EdgeInsets.symmetric(
-                                                    horizontal: 8.0,
-                                                    vertical: 12.0),
+                                            border: OutlineInputBorder(
+                                                borderSide: BorderSide.none),
+                                            hintText: "choose pick_up point",
+                                            focusColor: Colors.white,
+                                            floatingLabelBehavior:
+                                                FloatingLabelBehavior.never,
                                           ),
                                         );
                                       },
-                                      itemBuilder:
-                                          (context, String suggestion) {
-                                        return Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 20, vertical: 5),
-                                          child: Text(
-                                            suggestion,
-                                            style: regularWhiteText13(
-                                                Colors.black),
-                                          ),
-                                        );
-                                      },
-                                      onSelected: (String suggestion) async {
-                                        setState(() {
-                                          _pickupAddress.text =
-                                              suggestion; // Update the selected suggestion in the text field
-                                        });
+                                      suggestionsCallback: (pattern) async {
+                                        if (pattern.isNotEmpty) {
+                                          _placesController
+                                              .getSuggestions(pattern);
 
-                                        List<Location> locations =
-                                            await locationFromAddress(
-                                                suggestion);
-                                        if (locations.isNotEmpty) {
-                                          pickupMap = {
-                                            'pickup_latitude':
-                                                locations[0].latitude,
-                                            'pickup_longitude':
-                                                locations[0].longitude,
-                                          };
-                                          book.value =
-                                              'Calculate Fare'; // Update the fare calculation prompt
+                                          return _placesController
+                                              .placeList; // Return suggestions
                                         }
+                                        return [];
                                       },
-                                      // Validation can be handled outside the TypeAheadField since it's no longer a form field
+                                      itemBuilder: (context, suggestion) {
+                                        return ListTile(
+                                          title:
+                                              Text(suggestion['description']),
+                                        );
+                                      },
+                                      onSelected: (suggestion) {
+                                        FocusScope.of(context).unfocus();
+                                        _controller.text = suggestion[
+                                            'description']; // Set selected address
+                                        _placesController.placeList
+                                            .clear(); // Clear suggestions
+                                        _isSuggestionVisible =
+                                            false; // Hide suggestions
+                                        setState(() {}); // Refresh the UI
+                                      },
                                     ),
                                   ),
                                   GestureDetector(
@@ -317,6 +400,44 @@ class _DeliveryDetailScreenState extends State<DeliveryDetailScreen> {
                                 ],
                               ),
                             ),
+                          ),
+                        ],
+                      ),
+                      Stack(
+                        children: [
+                          Container(
+                            height: _isSuggestionVisible
+                                ? 200
+                                : 0, // Fixed height for suggestions
+                            child: Obx(() => Container(
+                                  decoration:
+                                      bixRectangularAppBarBoxDecorationWithRadiusElevation(
+                                          12, 8,
+                                          color: whiteContainerColor,
+                                          shadowColor:
+                                              Colors.black12.withOpacity(.06)),
+                                  child: ListView.builder(
+                                    physics: NeverScrollableScrollPhysics(),
+                                    shrinkWrap: true,
+                                    itemCount:
+                                        _placesController.placeList.length,
+                                    itemBuilder: (context, index) {
+                                      return ListTile(
+                                        title: Text(_placesController
+                                            .placeList[index]["description"]),
+                                        onTap: () {
+                                          _controller.text = _placesController
+                                              .placeList[index]["description"];
+                                          _placesController.placeList
+                                              .clear(); // Clear suggestions
+                                          _isSuggestionVisible =
+                                              false; // Hide suggestions
+                                          setState(() {}); // Refresh the UI
+                                        },
+                                      );
+                                    },
+                                  ),
+                                )),
                           ),
                         ],
                       ),
@@ -404,76 +525,63 @@ class _DeliveryDetailScreenState extends State<DeliveryDetailScreen> {
                                   ),
                                   horizontalSpace(width: 6),
                                   Expanded(
-                                    child: TypeAheadField<String>(
-                                      suggestionsCallback: (pattern) async {
-                                        if (pattern.isNotEmpty) {
-                                          var basemodel = await apiController
-                                              .mapService
-                                              .apiCallPlaceSuggestions({
-                                            'input': pattern,
-                                            'key': AppSecureInformation
-                                                .MAPS_API_KEY
-                                          }, apiController.isLoading);
-
-                                          // Log the suggestions for debugging
-                                          logMessage(basemodel);
-
-                                          return (basemodel.data
-                                              as List<String>);
-                                        }
-                                        return Future.value([]);
-                                      },
-                                      itemBuilder:
-                                          (context, String suggestion) {
-                                        return Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 20, vertical: 5),
-                                          child: Text(
-                                            suggestion,
-                                            style: regularWhiteText13(
-                                                Colors.black),
-                                          ),
-                                        );
-                                      },
-                                      onSelected: (String suggestion) async {
-                                        // Update _dropOff with the selected suggestion
-                                        _dropOff.text = suggestion;
-
-                                        // Fetch the location details
-                                        List<Location> locations =
-                                            await locationFromAddress(
-                                                suggestion);
-
-                                        // Update the dropOffMap if locations are found
-                                        if (locations.isNotEmpty) {
-                                          dropOffMap = {
-                                            'drop_latitude':
-                                                locations[0].latitude,
-                                            'drop_longitude':
-                                                locations[0].longitude,
-                                          };
-                                          book.value = 'Calculate Fare';
-                                        }
-                                      },
-                                      // Use builder to configure the text field
+                                    child: TypeAheadField(
                                       builder:
                                           (context, controller, focusNode) {
                                         return TextField(
-                                          controller:
-                                              controller, // Pass the controller here
-                                          focusNode: focusNode,
-                                          decoration:
-                                              densedFieldDecorationWithoutPadding(
-                                            style: const TextStyle(
-                                                fontSize: 12,
-                                                color: darkGreyColorTextField),
-                                            hint: "Input Address",
-                                            horizontalPad: 2.0,
-                                            verticalPad: 12.0,
+                                          focusNode: _fromfocusNode,
+                                          controller: fromaddresscontroller,
+                                          style: TextStyle(
+                                              color: Colors.black,
+                                              fontSize: 14,
+                                              decorationThickness: 0,
+                                              fontWeight: FontWeight.w500),
+                                          decoration: InputDecoration(
+                                            border: OutlineInputBorder(
+                                                borderSide: BorderSide.none),
+                                            hintText: "chose drop_off point",
+                                            hintStyle: TextStyle(
+                                                color: darkGreyColorTextField,
+                                                fontSize: 13,
+                                                decorationThickness: 0,
+                                                fontWeight: FontWeight.w500),
+                                            focusColor: Colors.white,
+                                            floatingLabelBehavior:
+                                                FloatingLabelBehavior.never,
                                           ),
-                                          maxLines: 1,
-                                          minLines: 1,
                                         );
+                                      },
+                                      suggestionsCallback: (pattern) async {
+                                        if (pattern.isNotEmpty) {
+                                          controllers.getSuggestions(pattern);
+
+                                          return controllers
+                                              .placeList; // Return suggestions
+                                        }
+                                        return [];
+                                      },
+                                      itemBuilder: (context, suggestion) {
+                                        return ListTile(
+                                          title:
+                                              Text(suggestion['description']),
+                                        );
+                                      },
+                                      onSelected: (suggestion) async {
+                                        dropOffMap = {
+                                          'drop_latitude': 0.0343,
+                                          'drop_longitude': 0.342424
+                                        };
+                                        var placeId = suggestion['place_id'];
+                                        // Fetch the details for the selected place
+                                        getPlaceDetails(placeId);
+                                        fromaddresscontroller.text = suggestion[
+                                            'description']; // Set selected address
+                                        controllers.placeList
+                                            .clear(); // Clear suggestions
+                                        _fromisSuggestionVisible =
+                                            false; // Hide suggestions
+                                        FocusScope.of(context).unfocus();
+                                        setState(() {}); // Refresh the UI
                                       },
                                     ),
                                   ),
@@ -484,6 +592,44 @@ class _DeliveryDetailScreenState extends State<DeliveryDetailScreen> {
                         ],
                       ),
                       verticalSpace(height: 20),
+                      Stack(
+                        children: [
+                          Container(
+                            height: _fromisSuggestionVisible
+                                ? 200
+                                : 0, // Fixed height for suggestions
+                            child: Obx(() => Container(
+                                  decoration:
+                                      bixRectangularAppBarBoxDecorationWithRadiusElevation(
+                                          12, 8,
+                                          color: whiteContainerColor,
+                                          shadowColor:
+                                              Colors.black12.withOpacity(.06)),
+                                  child: ListView.builder(
+                                    physics: NeverScrollableScrollPhysics(),
+                                    shrinkWrap: true,
+                                    itemCount: controllers.placeList.length,
+                                    itemBuilder: (context, index) {
+                                      return ListTile(
+                                        title: Text(controllers.placeList[index]
+                                            ["description"]),
+                                        onTap: () {
+                                          fromaddresscontroller.text =
+                                              controllers.placeList[index]
+                                                  ["description"];
+                                          controllers.placeList
+                                              .clear(); // Clear suggestions
+                                          _fromisSuggestionVisible =
+                                              false; // Hide suggestions
+                                          setState(() {}); // Refresh the UI
+                                        },
+                                      );
+                                    },
+                                  ),
+                                )),
+                          ),
+                        ],
+                      ),
                       Text(
                         "Deliver To",
                         style: regularWhiteText16(Colors.black),
@@ -1039,8 +1185,8 @@ class _DeliveryDetailScreenState extends State<DeliveryDetailScreen> {
         'phone': '+234${_phNumber.text}',
         'package_type': selectedPackageType,
         'description': _additionalInformation.text,
-        'pickup_address': _pickupAddress.text,
-        'drop_address': _dropOff.text,
+        'pickup_address': _currentAddress,
+        'drop_address': fromLocationAddress,
         'payment_method': paymentMethod,
         'sender_name': _senderName.text,
         'sender_phone': _senderPhoneNumber.text,
@@ -1074,14 +1220,12 @@ class _DeliveryDetailScreenState extends State<DeliveryDetailScreen> {
   }
 
   bool validateFields() {
-    if (isEmpty(_pickupAddress.text)) {
+    if (isEmpty(_currentAddress)) {
       showSnackBar('Please fill pickup address', context);
-    } else if (isEmpty(_dropOff.text)) {
+    } else if (fromLocationAddress == '') {
       showSnackBar('Please fill drop off address', context);
     } else if (pickupMap.isEmpty) {
       showSnackBar('Please choose your pickup address', context);
-    } else if (dropOffMap.isEmpty) {
-      showSnackBar('Please choose your drop off address', context);
     } else if (isEmpty(deliveryTypeController)) {
       showSnackBar('Please fill recipient name', context);
     } else if (isEmpty(_phNumber.text)) {
